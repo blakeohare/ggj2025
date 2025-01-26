@@ -31,7 +31,7 @@ const main = (() => {
         let player = {
             x: (Math.random() * 2 + 2) * (Math.random() < 0.5 ? -1 : 1) + 5, // 5-9 or 1-3
             y: Math.random() * 11,
-            z: 0,
+            z: 7,
             vx: Math.cos(theta) / 30 * 0.99,
             vy: Math.sin(theta) / 30 * 0.99,
             vz: 0,
@@ -105,6 +105,8 @@ const main = (() => {
         // which: { ABOVE | BELOW | HOLE }
         let renderPlayers = (which) => {
 
+            let justAbove = which === 'ABOVE';
+
             // Render players
             const PLAYER_WIDTH = Math.floor(TILE_WIDTH / 2);
             const PLAYER_HALF_WIDTH = PLAYER_WIDTH >> 1;
@@ -116,16 +118,23 @@ const main = (() => {
                 if (playerInHole) {
                     shouldRender = which === 'HOLE';
                 } else {
-                    shouldRender = playerIsAbove === (which === 'ABOVE');
+                    shouldRender = playerIsAbove === justAbove;
                 }
                 if (shouldRender) {
                     let px = CAMERA_X_OFFSET + player.x * TILE_WIDTH / 2 - player.y * TILE_WIDTH / 2;
                     let py = CAMERA_Y_OFFSET + player.x * TILE_HEIGHT / 2 + player.y * TILE_HEIGHT / 2;
+
+                    if (justAbove) {
+                        // draw a shadow for those above and over ground
+                        gfx.drawEllipse(px - PLAYER_HALF_WIDTH, py - PLAYER_HEIGHT / 6, PLAYER_WIDTH, PLAYER_HEIGHT / 3, 0, 0, 0, 70);
+                    }
+
                     py -= player.z * TILE_HEIGHT / 2;
                     gfx.drawEllipse(px - PLAYER_HALF_WIDTH - 2, py - PLAYER_HEIGHT - 2, PLAYER_WIDTH + 4, PLAYER_HEIGHT + 4, 0, 0, 0);
                     gfx.drawEllipse(px - PLAYER_HALF_WIDTH, py - PLAYER_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, ...player.color);
 
                     gfx.drawText(player.num, px - PLAYER_HALF_WIDTH, py - PLAYER_HEIGHT * 1.3, 24, 255, 255, 255);
+
                 }
             }
         };
@@ -143,7 +152,7 @@ const main = (() => {
                     if (tile) {
                         gfx.drawImageScaled(tile, px - (TILE_WIDTH >> 1), py, tile.width * SIZE_RATIO, tile.height * SIZE_RATIO);
                     } else {
-                        
+
                         renderPlayers('HOLE');
                     }
                 }
