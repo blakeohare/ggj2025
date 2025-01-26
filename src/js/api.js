@@ -18,10 +18,11 @@ const Api = (() => {
         }
     };
 
-    let sendSync = async (arenaToken) => {
+    let sendSync = async (arenaToken, lastKnownEventId) => {
         return send('/api.php', {
             type: 'viewSync',
             arena: arenaToken,
+            lastKnownEventId,
         });
     };
 

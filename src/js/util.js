@@ -53,6 +53,7 @@ const Util = (() => {
         return v;
     };
 
+
     return Object.freeze({
         pause,
         padNum,
@@ -61,4 +62,51 @@ const Util = (() => {
         isColorDark,
         loadImage,
     });
+})();
+
+const Base64 = (() => {
+
+  let letters = 'abcdefghijklmnopqrstuvwxyz';
+  let b64 = (letters.toUpperCase() + letters + '0123456789+/').split('');
+  let b64Lookup = {};
+  b64.forEach((c, i) => { b64Lookup[c] = i; });
+
+  let bytesToBase64 = bytes => {
+    let pairs = [];
+    let b;
+    for (let i = 0; i < bytes.length; i++) {
+      b = bytes[i];
+      pairs.push((b >> 6) & 3, (b >> 4) & 3, (b >> 2) & 3, b & 3);
+    }
+    while (pairs.length % 3 !== 0) pairs.push(0);
+    let sb = '';
+    for (let i = 0; i < pairs.length; i += 3) {
+      b = (pairs[i] << 4) | (pairs[i + 1] << 2) | pairs[i + 2];
+      sb += b64[b];
+    }
+    while (sb.length % 4 !== 0) sb += '=';
+    return sb;
+  };
+
+  let base64ToBytes = b64 => {
+    let pairs = [];
+    let chars = b64.split('');
+    while (chars.length && chars[chars.length - 1] === '=') chars.pop();
+    let b;
+    for (let c of chars) {
+      b = b64Lookup[c] || 0;
+      pairs.push((b >> 4) & 3, (b >> 2) & 3, b & 3);
+    }
+    while (pairs.length % 4) pairs.pop();
+    let bytes = [];
+    let len = pairs.length;
+
+    for (let i = 0; i < len; i += 4) {
+      bytes.push((pairs[i] << 6) | (pairs[i + 1] << 4) | (pairs[i + 2] << 2) | pairs[i + 3]);
+    }
+    return new Uint8Array(bytes);
+  };
+
+  return Object.freeze({ base64ToBytes, bytesToBase64 });
+
 })();

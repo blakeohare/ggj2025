@@ -1,5 +1,10 @@
 const playerControllerMain = (() => {
 
+    const TIME_SINCE_FLUSH_EXPIRE = 0.5;
+    const TIME_SINCE_FLUSH_INVALIDATE = 5.0;
+
+    let lastSendTime = 0;
+
     const TWO_PI = Math.PI * 2;
     let convertDirToCardinal = (dx, dy) => {
         let pizzaSlice = 16 * ((TWO_PI + Math.atan2(dy, dx)) % TWO_PI) / TWO_PI;
@@ -104,6 +109,9 @@ const playerControllerMain = (() => {
         while (host.firstChild) host.removeChild(host.firstChild);
         host.append(canvas);
         canvas.style.position = 'absolute';
+        canvas.style.userSelect = 'none';
+        canvas.classList.add('notouch');
+        document.body.classList.add('notouch');
         window.addEventListener('resize', () => updateSize(canvas));
         updateSize(canvas);
         document.body.append()
@@ -124,6 +132,8 @@ const playerControllerMain = (() => {
         };
 
         let handlePointerEvent = (e, evType) => {
+            e.preventDefault();
+            e.stopPropagation();
             let rect = canvas.getBoundingClientRect();
 
             let x = e.touches ? e.touches[0].clientX : e.clientX;
@@ -168,7 +178,11 @@ const playerControllerMain = (() => {
             inputQueue.push(dirSnapshot || 'O');
         };
 
-        window.setInterval(() => maybePumpQueue(), 20);
+        window.setInterval(() => {
+            maybePumpQueue();
+            let senderLed = 1 - Math.min(1, Math.max(0, (Util.getCurrentTime() - lastSendTime)));
+            screen.drawEllipse(5, 5, 15, 15, Math.floor(senderLed * 255), 0, 0);
+        }, 20);
 
         window.setInterval(() => {
             let pt = getPointerLocation();
@@ -192,9 +206,9 @@ const playerControllerMain = (() => {
             if (!queueHasStuff) {
                 // no need!
             } else if (activeFlushId) {
-                if (timeSinceFlush > 5) shouldDoFlush = true;
+                if (timeSinceFlush > TIME_SINCE_FLUSH_INVALIDATE) shouldDoFlush = true;
             } else {
-                if (timeSinceFlush > 1) shouldDoFlush = true;
+                if (timeSinceFlush > TIME_SINCE_FLUSH_EXPIRE) shouldDoFlush = true;
             }
             if (shouldDoFlush) {
                 lastFlush = now;
@@ -210,6 +224,7 @@ const playerControllerMain = (() => {
                     if (!isActive) {
                         disconnected = true;
                     }
+                    lastSendTime = Util.getCurrentTime();
                 });
             }
         };

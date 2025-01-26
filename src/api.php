@@ -37,9 +37,52 @@
     }
 
     function api_view_sync($arena_id, $last_known_event_id) {
+
+        $arena_info = sql_select_row("SELECT * FROM arena_instance WHERE `external_token` = " . sql_sanitize_quoted($arena_id) . " LIMIT 1");
+
+        if ($arena_info === null) {
+            return ['ok' => true, 'isActive' => false];
+        }
+
+        $arena_id = intval($arena_info['arena_id']);
+
+        sql_mutate("
+            DELETE FROM arena_event
+            WHERE
+                arena_id = $arena_id AND
+                event_id <= $last_known_event_id
+        ");
+
+        $event_rows = sql_select_rows("
+            SELECT *
+            FROM arena_event
+            WHERE
+                arena_id = $arena_id
+            ORDER BY
+                event_id
+            ");
+
+        $events_out = [];
+        foreach ($event_rows as $event) {
+            array_push($events_out, [
+                'id' => intval($event['event_id']),
+                'type' => $event['event_type'],
+                'data' => $event['data'],
+            ]);
+        }
+
+        sql_mutate("
+            UPDATE arena_instance
+            SET
+                last_sync_time = " . time() . "
+            WHERE arena_id = $arena_id
+            LIMIT 1
+        ");
+
         return [
-            'ok' => false,
-            'error' => "the view sync is not done yet!",
+            'ok' => true,
+            'isActive' => true,
+            'events' => $events_out,
         ];
     }
 

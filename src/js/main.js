@@ -22,31 +22,151 @@ const main = (() => {
     let lastSyncId = 0;
     let lastSyncTime = Util.getCurrentTime();
 
+    let createQrCode = async url => {
+        let response = await fetch('https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + url);
+        let qrBody = await response.arrayBuffer();
+        let b64 = Base64.bytesToBase64(new Uint8Array(qrBody));
+        let img = document.createElement('img');
+        img.src = 'data:image/png;base64,' + b64;
+        img.style.width = '250px';
+        img.style.height = '250px';
+        img.style.imageRendering = 'pixelated';
+        img.style.position = 'absolute';
+        img.style.right = '10px';
+        img.style.top = '10px';
+        document.body.append(img);
+    };
+
     // TEMP DEBUG SETUP
 
-    for (let i = 0; i < 3; i++) {
+    let playersById = {};
 
-        let theta = Math.random() * 3.14159 * 2;
-
+    let createPlayer = (dbId, num, colorHex) => {
         let player = {
+            databaseId: dbId,
+            num,
+            colorHex,
+            color: Util.hexToRgb(colorHex),
             x: (Math.random() * 2 + 2) * (Math.random() < 0.5 ? -1 : 1) + 5, // 5-9 or 1-3
             y: Math.random() * 11,
             z: 7,
-            vx: Math.cos(theta) / 30 * 0.99,
-            vy: Math.sin(theta) / 30 * 0.99,
+            vx: 0,
+            vy: 0,
             vz: 0,
-            color: Util.hexToRgb('0080ff'),
-            num: '' + Util.padNum(Math.floor(Math.random() * 1000), 3),
+            moveQueue: [],
+            replayingSince: 0,
+            immuneTo: {},
         };
+        playersById[dbId] = player;
+        return player;
+    };
 
-        players.push(player);
-    }
     players.forEach(p => { p.sortKey = p.x + p.y});
 
+    let poll = async (arenaToken) => {
+        let lastKnownId = 0;
+        while (true) {
+
+            let response = await Api.sendSync(arenaToken, lastKnownId);
+            if (!response.isActive) {
+                throw new Error('arena is no longer active');
+            }
+
+            let { events } = response;
+            for (let ev of events) {
+                lastKnownId = Math.max(lastKnownId, ev.id);
+                switch (ev.type) {
+                    case 'JOIN':
+                        let [dbId, num, colorHex] = ev.data.split(',');
+                        players.push(createPlayer(parseInt(dbId), num, colorHex));
+                        break;
+                    case 'MOVE':
+                        let [dbIdRaw, movesEnc] = ev.data.split(':');
+                        let player = playersById[dbIdRaw];
+                        if (player) {
+                            let moves = movesEnc ? movesEnc.split(',') : [];
+                            for (let i = 0; i + 1 < moves.length; i += 2) {
+                                let dir = moves[i];
+                                let amt = moves[i + 1];
+                                for (let j = 0; j < amt; j++){
+                                    if (dir !== 'O') {
+                                        player.moveQueue.push([dir, dir === 'O' ? 25 : 50]);
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                }
+            }
+
+            await Util.pause(0.15);
+        }
+    };
+
+    let ensureInRange = (val, a, b) => {
+        if (val < a) return a;
+        if (val > b) return b;
+        return val;
+    };
+
+    let DIAGONAL_MAGNITUDE = Math.sqrt(2) / 2;
+    let applyDirs = (player, dirs) => {
+        let dx = 0;
+        let dy = 0;
+        switch (dirs) {
+            case 'W':
+                dx = -DIAGONAL_MAGNITUDE;
+                dy = -DIAGONAL_MAGNITUDE;
+                break;
+            case 'S':
+                dx = DIAGONAL_MAGNITUDE;
+                dy = DIAGONAL_MAGNITUDE;
+                break;
+            case 'A':
+                dx = -DIAGONAL_MAGNITUDE;
+                dy = DIAGONAL_MAGNITUDE;
+                break;
+            case 'D':
+                dx = DIAGONAL_MAGNITUDE;
+                dy = -DIAGONAL_MAGNITUDE;
+                break;
+            case 'WA':
+            case 'AW':
+                dx = -1;
+                break;
+            case 'WD':
+            case 'DW':
+                dy = -1;
+                break;
+            case 'AS':
+            case 'SA':
+                dy = 1;
+                break;
+            case 'SD':
+            case 'DS':
+                dx = 1;
+                break;
+        }
+        let accel = 0.01;
+        let maxV = 0.08;
+        player.vx = ensureInRange(player.vx + accel * dx, -maxV, maxV);
+        player.vy = ensureInRange(player.vy + accel * dy, -maxV, maxV);
+    };
 
     let update = () => {
 
         for (let player of players) {
+
+            if (player.moveQueue.length) {
+                let slot = player.moveQueue[0];
+                slot[1] -= 1000 / 30;
+                let dirs = slot[0];
+                applyDirs(player, dirs);
+                if (slot[1] < 0) {
+                    player.moveQueue.splice(0, 1);
+                }
+            }
+
             let nx = player.x + player.vx;
             let ny = player.y + player.vy;
             if (nx > 0 && ny > 0 && nx < COLS && ny < ROWS) {
@@ -71,11 +191,99 @@ const main = (() => {
                 }
             }
 
-            if (player.z > 100) {
+            if (player.z < -60) {
                 player.isDead = true;
+                players.push(createPlayer(player.databaseId, player.num, player.colorHex));
             }
+
+            player.vx *= 0.97;
+            player.vy *= 0.97;
         }
         players = players.filter(p => !p.isDead);
+
+        applyCollisions();
+    };
+
+    let bucketTemplate = [];
+    for (let i = 0; i < 7 * 7; i++) {
+        bucketTemplate.push(null);
+    }
+    let neighborOffsets = [-1, 1, 7, -7];
+    let applyCollisions = () => {
+        let buckets = [...bucketTemplate];
+        for (let player of players) {
+            if (player.z !== 0) continue;
+            let x = Math.floor(player.x / COLS * 7);
+            let y = Math.floor(player.y / ROWS * 7);
+            let i = y * 7 + x;
+            for (let neighborOffset of neighborOffsets) {
+                let index = i + neighborOffset;
+                buckets[index] = buckets[index] || [];
+                buckets[index].push(player);
+            }
+        }
+
+        let collisions = {};
+
+        let uniqueCollisionKey = (p1, p2) => {
+            let keys = [p1.num, p2.num];
+            keys.sort();
+            return keys.join('_');
+        };
+
+        let now = Util.getCurrentTime();
+        for (let bucket of buckets) {
+            if (bucket) {
+                for (let i = 0; i < bucket.length; i++) {
+                    let player1 = bucket[i];
+                    for (let j = i + 1; j < bucket.length; j++) {
+                        let player2 = bucket[j];
+
+                        let dx = player1.x - player2.x;
+                        let dy = player1.y - player2.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < 0.4) {
+                            let key = uniqueCollisionKey(player1, player2);
+                            if (now - (player1.immuneTo[player2.num] || 0) > 2.5) {
+                                collisions[key] = [player1, player2];
+                                player1.immuneTo[player2.num] = now;
+                                player2.immuneTo[player1.num] = now;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for (let collision of Object.values(collisions)) {
+            console.log(collision)
+
+            let [p1, p2] = collision;
+            let fastX = 0;
+            let fastY = 0;
+            let p1V = Math.max(0.0001, Math.sqrt(p1.vx * p1.vx + p1.vy * p1.vy));
+            let p2V = Math.max(0.0001, Math.sqrt(p2.vx * p2.vx + p2.vy * p2.vy));
+            if (p1V < 0.0001 && p2V < 0.0001) {
+                console.log("NO");
+                continue;
+            }
+
+            if (p1V < p2V) {
+                fastX = p2.vx / p2V * (p1V + p2V);
+                fastY = p2.vy / p2V * (p1V + p2V);
+                p2.vx = 0;
+                p2.vy = 0;
+                p1.vx = fastX;
+                p1.vy = fastY;
+            } else {
+                fastX = p1.vx / p1V * (p1V + p2V);
+                fastY = p1.vy / p1V * (p1V + p2V);
+                p1.vx = 0;
+                p1.vy = 0;
+                p2.vx = fastX;
+                p2.vy = fastY;
+            }
+        }
     };
 
     let render = (gfx) => {
@@ -92,7 +300,7 @@ const main = (() => {
         const TILE_WIDTH = IMAGES.R.width * SIZE_RATIO;
         const TILE_HEIGHT = Math.floor(IMAGES.R.height * SIZE_RATIO * 2 / 3);
 
-
+        players.forEach(p => { p.sortKey = p.x + p.y; });
         players.sort((a, b) => a.sortKey - b.sortKey);
         let playerBuckets = {};
         for (let player of players) {
@@ -199,6 +407,10 @@ const main = (() => {
         }
 
         const gfx = Gfx2D.newScreen(800, 600);
+
+        poll(tokenId);
+
+        createQrCode('https://bubblerumble.fun/join/' + tokenId);
 
         const FPS = 30;
         while (true) {

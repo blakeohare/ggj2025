@@ -30,17 +30,22 @@
         $color = $player_info['color_rgb'];
         $jersey_num = $player_info['jersey_num'];
 
+        $invalidator = '?v=' . time();
+
         echo html_emit_header('Bubble Rumble', implode("\n", [
-            '<script src="/js/util.js"></script>',
-            '<script src="/js/api.js"></script>',
-            '<script src="/js/gfx2d.js"></script>',
-            '<script src="/js/playercontroller.js"></script>',
+            '<script src="/js/util.js' . $invalidator . '"></script>',
+            '<script src="/js/api.js' . $invalidator . '"></script>',
+            '<script src="/js/gfx2d.js' . $invalidator . '"></script>',
+            '<script src="/js/playercontroller.js' . $invalidator . '"></script>',
             '<script>',
             "  window.addEventListener('load', () => { playerControllerMain('" . $jersey_num . "', '" . $color . "', '" . $player_token . "'); });",
             '</script>',
             '<style>',
             '  html, body { position: relative; width: 100%; height: 100%; overflow-y: hidden; overflow-x: hidden; }',
             '  #host { position: absolute; width: 100%; height: 100%; background-color: #000; }',
+            '  .notouch {', 
+            '    -webkit-user-select: none;',
+            '  }',
             '</style>',
         ]));
 
