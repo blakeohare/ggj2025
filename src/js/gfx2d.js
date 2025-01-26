@@ -4,6 +4,7 @@ const Gfx2D = (() => {
         let canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
+        canvas.style.imageRendering = 'pixelated';
         let host = document.getElementById('host');
         while (host.firstChild) host.remove(host.firstChild);
         host.append(canvas);
@@ -25,9 +26,17 @@ const Gfx2D = (() => {
             drawImageScaled: (img, x, y, w, h) => {
                 ctx.drawImage(img, x, y, w, h);
             },
+
             getDomElement: () => canvas,
             getWidth: () => width,
             getHeight: () => height,
+            drawText: (text, x, y, sz, r, g, b) => {
+                ctx.font = sz + 'px sans-serif';
+                ctx.fillStyle = rgb2Css(r, g, b);
+                ctx.strokeStyle = '#000';
+                ctx.strokeText(text, x, y);
+                ctx.fillText(text, x, y);
+            },
         };
 
         return Object.freeze(gfx);

@@ -33,8 +33,10 @@ const Util = (() => {
     let loadImage = async path => {
         return new Promise(res => {
             let img = document.createElement('img');
+            img.style.imageRendering = 'pixelated';
             img.addEventListener('load', () => {
                 let canvas = document.createElement('canvas');
+                canvas.style.imageRendering = 'pixelated';
                 canvas.width = img.width;
                 canvas.height = img.height;
                 let ctx = canvas.getContext('2d');
@@ -45,8 +47,15 @@ const Util = (() => {
         });
     };
 
+    let padNum = (n, sz) => {
+        let v = '' + n;
+        while (v.length < sz) v = '0' + v;
+        return v;
+    };
+
     return Object.freeze({
         pause,
+        padNum,
         getCurrentTime,
         hexToRgb,
         isColorDark,
