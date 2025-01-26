@@ -1,0 +1,6 @@
+RewriteEngine on
+
+RewriteRule ^create$ create.php [L]
+RewriteRule ^join/[a-zA-Z0-9]+$ join.php [L]
+RewriteRule ^view/[a-zA-Z0-9]+$ view.php [L]
+RewriteRule ^play/[a-zA-Z0-9]+$ play.php [L]
