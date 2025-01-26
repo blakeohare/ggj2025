@@ -23,6 +23,12 @@ const Gfx2D = (() => {
                 ctx.fillStyle = rgb2Css(r, g, b, a);
                 ctx.fillRect(x, y, width, height);
             },
+            drawEllipse: (x, y, width, height, r, g, b, a) => {
+                ctx.fillStyle = rgb2Css(r, g, b, a);
+                ctx.beginPath();
+                ctx.ellipse(x + width / 2, y + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+            },
             drawImageScaled: (img, x, y, w, h) => {
                 ctx.drawImage(img, x, y, w, h);
             },
