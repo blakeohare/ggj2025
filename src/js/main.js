@@ -410,7 +410,7 @@ const main = (() => {
 
         poll(tokenId);
 
-        createQrCode('https://bubblerumble.fun/join/' + tokenId);
+        createQrCode('https://bubblerumble.nfshost.com/join/' + tokenId);
 
         const FPS = 30;
         while (true) {
